@@ -1,0 +1,1 @@
+"""Always have a Scratch Script for rough ideas"""
