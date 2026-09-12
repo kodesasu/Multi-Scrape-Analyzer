@@ -50,7 +50,7 @@ pip install aiohttp requests beautifulsoup4
 Clone the repository.
 
 ```bash
-git clone hhttps://github.com/kodesasu/office-politics-oop.git
+git clone https://github.com/kodesasu/Multi-Scrape-Analyzer.git
 ```
 
 Move into the project folder.
