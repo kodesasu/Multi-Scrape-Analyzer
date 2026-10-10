@@ -206,6 +206,13 @@ The log records:
 
 Older logs are automatically archived when the log file reaches its size limit.
 
+The command-line run owns the log file in the parent process. Worker processes
+send records through a queue, so they do not independently rotate the same file.
+Importing `main` as a library does not create log directories, print a message,
+or configure the application's root logger. Library callers can use the named
+`multi_scrape_analyzer` logger or opt into `app_logging.log_to_file()` and pass
+its queue as `log_queue` to `process_multiple_cpu_bound()`.
+
 ---
 
 # Customizing the Scraper

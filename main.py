@@ -1,37 +1,20 @@
-import asyncio, requests, aiohttp, logging
+import asyncio, requests, aiohttp
+import multiprocessing
 import time
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from bs4 import BeautifulSoup
 from collections import Counter
+from app_logging import logger, configure_worker_logging, log_to_file
 
 
 main_path = Path(__file__).parent / "LOG"
-if not main_path.exists():
-    try:
-        main_path.mkdir()
-        print(f"All Logs are stored in: {main_path}")
-    except (PermissionError, OSError) as e:
-        print(f"Something went wrong while creating LOG Directory: {e}")
-        main_path = Path(__file__).parent
-        print(f"logs will be stored in {main_path}")
+main_path_log = main_path / "main.log"
 
-main_path_log = main_path / f"{Path(__file__).stem}.log"
-log_handle = RotatingFileHandler(
-    main_path_log,
-    maxBytes=5*1024*1024,
-    encoding="utf-8",
-    backupCount=3
-)
-
-log_handle.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-logging.basicConfig(level=logging.DEBUG,
-                    handlers=[log_handle])
 
 async def fetch_url_async(session, url, max_retry, semaphore):
     async with semaphore:
-        logging.debug(f"Fetching url: {url}")
+        logger.debug(f"Fetching url: {url}")
 
         for i in range(max_retry):
             try:
@@ -40,7 +23,7 @@ async def fetch_url_async(session, url, max_retry, semaphore):
                         if i < (max_retry - 1):
                             await asyncio.sleep(1)
                         else:
-                            logging.error(
+                            logger.error(
                                 f"Aysncio Scraping Failed on [{url}] | Error: Invalid Status Code:{response.status}\n")
                             return {"url": url, "success": False, "content": f"Invalid Status Code:{response.status}"}
 
@@ -48,7 +31,7 @@ async def fetch_url_async(session, url, max_retry, semaphore):
                         if "text" in response.headers.get("Content-Type"):
                             web_content = await response.text()
 
-                            logging.info(f"Aysncio Scraping Successful on [{url}] | Content-Type: html/text ")
+                            logger.info(f"Aysncio Scraping Successful on [{url}] | Content-Type: html/text ")
                             return {"url": url,
                                     "success": True,
                                     "content": web_content,
@@ -58,68 +41,68 @@ async def fetch_url_async(session, url, max_retry, semaphore):
                         elif "json" in response.headers.get("Content-Type"):
                             web_content = await response.json()
 
-                            logging.info(f"Aysncio Scraping Successful on [{url}] | Content-Type: Application/json ")
+                            logger.info(f"Aysncio Scraping Successful on [{url}] | Content-Type: Application/json ")
                             return {"url": url,
                                     "success": True,
                                     "content": web_content,
                                     "type": response.headers["Content-Type"]
                                     }
-                        logging.info(f"Returning Content-type\n")
+                        logger.info(f"Returning Content-type\n")
 
             except aiohttp.ClientConnectorError as cce:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
-                    logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {cce}\n")
+                    logger.error(f"Aysncio Scraping Failed on [{url}] | Error: {cce}\n")
                     return {"url": url, "success": False, "content": cce}
 
             except aiohttp.ClientHttpProxyError as chpe:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
-                    logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {chpe}\n")
+                    logger.error(f"Aysncio Scraping Failed on [{url}] | Error: {chpe}\n")
                     return {"url": url, "success": False, "content": chpe}
 
             except aiohttp.ServerDisconnectedError as sde:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
-                    logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {sde}\n")
+                    logger.error(f"Aysncio Scraping Failed on [{url}] | Error: {sde}\n")
                     return {"url": url, "success": False, "content": sde}
 
             except aiohttp.ClientPayloadError as cpe:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
-                    logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {cpe}\n")
+                    logger.error(f"Aysncio Scraping Failed on [{url}] | Error: {cpe}\n")
                     return {"url": url, "success": False, "content": cpe}
 
             except asyncio.TimeoutError as te:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
-                    logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {te}\n")
+                    logger.error(f"Aysncio Scraping Failed on [{url}] | Error: {te}\n")
                     return {"url": url, "success": False, "content": te}
 
             except Exception as e:
                 if i < max_retry - 1:
                     await asyncio.sleep(1)
                 else:
-                    logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {e}\n")
+                    logger.error(f"Aysncio Scraping Failed on [{url}] | Error: {e}\n")
                     return {"url": url, "success": False, "content": e}
 
 
 async def fetch_multiple_urls_async(urls, max_retry=None, max_workers=None):
-    logging.debug("Fetching Url Request | Method: Asyncio")
+    logger.debug("Fetching Url Request | Method: Asyncio")
 
     max_retry = max_retry if max_retry else 4
     max_workers = max_workers if max_workers else 4
     time_out = aiohttp.ClientTimeout(sock_connect=5, sock_read=5)
     semaphore = asyncio.Semaphore(max_workers)
 
-    logging.info(
+    logger.info(
         f"Max Retries for Scrape: {max_retry}, Max Workers for AsyncioThreads: {max_workers}, Urls: {len(urls)}")
-    logging.debug(f"Asyncio Threading Process Started")
+    logger.debug(f"Asyncio Threading Process Started")
 
     start = time.time()
     async with aiohttp.ClientSession(timeout=time_out) as session:
@@ -129,15 +112,15 @@ async def fetch_multiple_urls_async(urls, max_retry=None, max_workers=None):
     finished = round(time.time() - start, 5)
     cpu_time = {"cpu_time_async": finished}
 
-    logging.info(f"Aysncio Threading Process Completed | CPU Time: {finished} Secs")
+    logger.info(f"Aysncio Threading Process Completed | CPU Time: {finished} Secs")
     re_list.append(cpu_time)
 
-    logging.info(f"Returning Scraped lIst: {len(re_list)}\n")
+    logger.info(f"Returning Scraped lIst: {len(re_list)}\n")
     return re_list
 
 
 def fetch_url_threaded(url, max_retry):
-    logging.debug(f"Fetching url: {url}")
+    logger.debug(f"Fetching url: {url}")
 
     for i in range(max_retry):
         try:
@@ -146,13 +129,13 @@ def fetch_url_threaded(url, max_retry):
                 if i < max_retry - 1:
                     time.sleep(1)
                 else:
-                    logging.error(
+                    logger.error(
                         f"ThreadPool Scraping Failed on [{url}] | Error: Invalid Status Code:{response.status_code}\n")
                     return {"url": url, "success": False, "content": f"Invalid Status Code:{response.status_code}"}
             else:
                 if "text" in response.headers.get("Content-Type"):
 
-                    logging.info(f"ThreadPool Scraping Successful on [{url}] | Content-Type: html/text ")
+                    logger.info(f"ThreadPool Scraping Successful on [{url}] | Content-Type: html/text ")
                     return {"url": url,
                             "success": True,
                             "content": response.text,
@@ -161,52 +144,52 @@ def fetch_url_threaded(url, max_retry):
 
                 elif "json" in response.headers.get("Content-Type"):
 
-                    logging.info(f"ThreadPool Scraping Successful on [{url}] | Content-Type: Application/Json")
+                    logger.info(f"ThreadPool Scraping Successful on [{url}] | Content-Type: Application/Json")
                     return {"url": url,
                             "success": True,
                             "content": response.json(),
                             "type": response.headers["Content-Type"]
                             }
-                logging.info(f"Returning Content-type\n")
+                logger.info(f"Returning Content-type\n")
 
         except ConnectionError as ce:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
-                logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {ce}\n")
+                logger.error(f"ThreadPool Scraping Failed on [{url}] | Error: {ce}\n")
                 return {"url": url, "success": False, "content": ce}
 
         except TimeoutError as te:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
-                logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {te}\n")
+                logger.error(f"ThreadPool Scraping Failed on [{url}] | Error: {te}\n")
                 return {"url": url, "success": False, "content": te}
 
         except requests.RequestException as rx:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
-                logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {rx}\n")
+                logger.error(f"ThreadPool Scraping Failed on [{url}] | Error: {rx}\n")
                 return {"url": url, "success": False, "content": rx}
 
         except Exception as e:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
-                logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {e}\n")
+                logger.error(f"ThreadPool Scraping Failed on [{url}] | Error: {e}\n")
                 return {"url": url, "success": False, "content": e}
 
 def fetch_multiple_threaded(urls, max_retry=None, max_workers=None):
-    logging.debug(f"Starting Url Scraping | Method: ThreadPool\n")
-    logging.debug("Fetching Url Request | Method: ThreadPool")
+    logger.debug(f"Starting Url Scraping | Method: ThreadPool\n")
+    logger.debug("Fetching Url Request | Method: ThreadPool")
 
     max_workers = max_workers if max_workers else 4
     max_retry = max_retry if max_retry else 4
 
-    logging.info(
+    logger.info(
         f"Max Retries for Scrape: {max_retry}, Max Workers for ThreadPool Threads: {max_workers}, Urls: {len(urls)}")
-    logging.debug(f"ThreadPool Threading Process Started")
+    logger.debug(f"ThreadPool Threading Process Started")
 
     start = time.time()
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -215,22 +198,22 @@ def fetch_multiple_threaded(urls, max_retry=None, max_workers=None):
     finished = round(time.time() - start, 5)
     cpu_time = {"cpu_time_threaded": finished}
 
-    logging.info(f"ThreadPool Threading Process Completed | CPU Time: {finished} Secs")
+    logger.info(f"ThreadPool Threading Process Completed | CPU Time: {finished} Secs")
     result.append(cpu_time)
 
-    logging.info(f"Returning Scraped lIst: {len(result)}\n")
+    logger.info(f"Returning Scraped lIst: {len(result)}\n")
     return result
 
 def sequential_fetch(urls, max_retry=None):
-    logging.debug(f"Starting Url Scraping | Method: Sequential Fetch\n")
-    logging.debug("Fetching Url Request | Method: Sequential Fetch")
+    logger.debug(f"Starting Url Scraping | Method: Sequential Fetch\n")
+    logger.debug("Fetching Url Request | Method: Sequential Fetch")
 
     max_rty = max_retry if max_retry else 4
     result_list = []
 
-    logging.info(
+    logger.info(
         f"Max Retries for Scrape: {max_retry}, Urls: {len(urls)}")
-    logging.debug(f"Sequential Fetch Threading Process Started")
+    logger.debug(f"Sequential Fetch Threading Process Started")
 
     start = time.time()
     for url in urls:
@@ -239,20 +222,20 @@ def sequential_fetch(urls, max_retry=None):
     finished = round(time.time() - start, 5)
     cpu_time = {"seq_time_threaded": finished}
 
-    logging.info(f"Sequential Fetch Threading Process Completed | CPU Time: {finished} Secs")
+    logger.info(f"Sequential Fetch Threading Process Completed | CPU Time: {finished} Secs")
     result_list.append(cpu_time)
 
-    logging.info(f"Returning Scraped lIst: {len(result_list)}\n")
+    logger.info(f"Returning Scraped lIst: {len(result_list)}\n")
     return result_list
 
 
 
 
 def clean_words(content):
-    logging.debug("Cleaning Words")
+    logger.debug("Cleaning Words")
 
     page = BeautifulSoup(content, "html.parser")
-    logging.info("Page Parsed with Beautiful Soup 4")
+    logger.info("Page Parsed with Beautiful Soup 4")
 
     page_text = page.text.split()
     contraband = """ !.,“”@#$%^&*(){}[];|/\\-_=·+<>:❤'\""""
@@ -266,14 +249,14 @@ def clean_words(content):
             if not cleaned_word in [".", "-"]:  #for words like (....) or (----)
                 cleaned_page_stg2.append(cleaned_word)
 
-    logging.info("Words in Page cleaned | Returning Content")
+    logger.info("Words in Page cleaned | Returning Content")
     return page, cleaned_page_stg2
 
 def analyze_words(content):
-    logging.debug("Analyzing Words in Page")
+    logger.debug("Analyzing Words in Page")
 
     _, cleaned_page_word_list = clean_words(content)
-    logging.debug("Analyzing cleaned Page")
+    logger.debug("Analyzing cleaned Page")
 
     cleaned_characters = "".join(word for word in cleaned_page_word_list)
     word_frequency = Counter(cleaned_page_word_list)
@@ -294,11 +277,11 @@ def analyze_words(content):
                           "most_common_word": most_common_word,
                           }
 
-    logging.info("Analyzing Process Completed")
+    logger.info("Analyzing Process Completed")
     return analyzed_word_dict
 
 def analyze_html(content):
-    logging.debug(f"Analyzing HTML Contents in Page")
+    logger.debug(f"Analyzing HTML Contents in Page")
 
     page, cleaned_page_word_list = clean_words(content)
     find_tags = page.find_all(True)
@@ -319,39 +302,39 @@ def analyze_html(content):
                      "word_frequency_dictionary": word_frequency
                      }
 
-    logging.info("Analyzing HTML Completed")
+    logger.info("Analyzing HTML Completed")
     return html_analyzed
 
 def process_task(dicts):
-    logging.debug(f"Processing Scraped Content-type")
+    logger.debug(f"Processing Scraped Content-type")
 
     if "text" in dicts["type"]:
         url = dicts["url"]
         content = dicts["content"]
 
-        logging.info(f"Content from Url: [{url}] is html/text ")
+        logger.info(f"Content from Url: [{url}] is html/text ")
         word_analysis = analyze_words(content)
         html_analysis = analyze_html(content)
 
-        logging.info(f"Scraping Process for [{url}] Completed\n")
+        logger.info(f"Scraping Process for [{url}] Completed\n")
         return {"url": url, "words": word_analysis, "html": html_analysis}
 
     else:
         url = dicts["url"]
         c_type = dicts["type"]
 
-        logging.warning(f"Cannot parse with BeautifulSoup | Content-Type not html/text ")
+        logger.warning(f"Cannot parse with BeautifulSoup | Content-Type not html/text ")
         return {"url": url, "error": f"Cannot parse with BeautifulSoup | Content-Type: {c_type}"}
 
 
 def run_async(urls, max_rty=None, max_wrks=None):
-    logging.debug(f"Starting Url Scraping | Method: Asyncio\n")
+    logger.debug(f"Starting Url Scraping | Method: Asyncio\n")
 
     data = asyncio.run(fetch_multiple_urls_async(urls, max_rty, max_wrks))
     return data
 
 def split_urls(urls):
-    logging.debug(f"Splitting urls into parts for different thread methods")
+    logger.debug(f"Splitting urls into parts for different thread methods")
 
     dividen = len(urls) // 3
     mid_range = len(urls) - dividen
@@ -371,15 +354,15 @@ def split_urls(urls):
     for k in range(mid_range, len(urls)):
         url_set3.add(urls[k])
 
-    logging.info("Url Splitting Completed")
+    logger.info("Url Splitting Completed")
     return url_set1, url_set2, url_set3
 
 
-def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=None):
+def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=None, *, log_queue=None):
     main_workers = max_wrks_pool if max_wrks_pool else 4
 
     if not len(urls) % 3 == 0:
-        logging.info(
+        logger.info(
             f"Url list is not divisible by 3 | Current Url List: {len(urls)} | Time comparison might be Inaccurate")
         print(f"For the most Accurate time Comparison with Sequential_task, ThreadPool and Asyncio, "
               f"let the Url List be divisible by 3 | "
@@ -387,7 +370,7 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
         print()
 
     urls_1, urls_2, urls_3 = split_urls(urls)
-    logging.info(f"Url splits: first_set={len(urls_1)}, second_set={len(urls_2)}, third_set={len(urls_3)}\n")
+    logger.info(f"Url splits: first_set={len(urls_1)}, second_set={len(urls_2)}, third_set={len(urls_3)}\n")
 
     collected_data = []
     collected_time = {}
@@ -395,10 +378,13 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
     pool_results = []
 
     start = time.time()
-    logging.debug(
+    logger.debug(
         f"Starting ProcessPoolExecutor for Threading | Urls: {len(urls)}, Maximum Worker for ProcessPool: {main_workers}")
 
-    with ProcessPoolExecutor(max_workers=main_workers) as proces_exe:
+    with ProcessPoolExecutor(
+        max_workers=main_workers, mp_context=multiprocessing.get_context("spawn"),
+        initializer=configure_worker_logging, initargs=(log_queue,),
+    ) as proces_exe:
         process_futures_threads = []
         task_1 = proces_exe.submit(run_async, urls_1, max_rty, max_wrks)
         task_2 = proces_exe.submit(fetch_multiple_threaded, urls_2, max_rty, max_wrks)
@@ -419,11 +405,11 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
                         collected_errors.append(dicts)
         finished = round(time.time() - start, 5)
 
-        logging.debug(
+        logger.debug(
             f"ProcessPoolExecutor for Threading Completed | CPU Time: {finished} secs\n")
         start_2 = time.time()
 
-        logging.debug(
+        logger.debug(
             f"Starting ProcessPoolExecutor for Process | Maximum Worker for ProcessPool: {main_workers}")
         process_futures = [proces_exe.submit(process_task, dts) for dts in collected_data]
 
@@ -432,7 +418,7 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
             pool_results.append(res)
 
     fin = round(time.time() - start_2, 5)
-    logging.debug(
+    logger.debug(
         f"ProcessPoolExecutor for Process Completed | CPU Time: {fin} secs\n")
 
     collected_time.update({"all_cpu_time_process": finished})
@@ -440,7 +426,7 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
     return collected_time, collected_errors, pool_results
 
 
-if __name__ == "__main__":
+def run_cli(log_queue=None):
     print(f"\nAll Logs are stored in: {main_path}\n")
     url_list = ["https://books.toscrape.com/", "http://quotes.toscrape.com/",
              "https://sandbox.oxylabs.io/", "https://www.scrapethissite.com/pages/simple/",
@@ -451,19 +437,19 @@ if __name__ == "__main__":
              "https://old.reddit.com/"]
 
     print(f"{"=" * 20} TESTING {"=" * 20}\n")
-    logging.info(f"Starting Script Process\n")
-    task_time, errors, results = process_multiple_cpu_bound(url_list)
+    logger.info(f"Starting Script Process\n")
+    task_time, errors, results = process_multiple_cpu_bound(url_list, log_queue=log_queue)
 
-    logging.info(f"Script Process Completed\n")
+    logger.info(f"Script Process Completed\n")
     sequential_time = task_time["seq_time_threaded"]
     threadpool_time = task_time["cpu_time_threaded"]
     async_thread_time = task_time["cpu_time_async"]
     processpool_time = task_time["cpu_time_process"]
     processpool_thread_time = task_time["all_cpu_time_process"]
 
-    logging.info("Printing Process Contents")
+    logger.info("Printing Process Contents")
 
-    logging.info("Printing Process Time")
+    logger.info("Printing Process Time")
     print(f"{"=" * 20} TIME COMPARISON {"=" * 20}")
     print(f"Sequential Time: {sequential_time} secs")
     print(f"ThreadPool Time: {threadpool_time} secs")
@@ -472,14 +458,14 @@ if __name__ == "__main__":
     print(f"ProcessPool on Processes Time: {processpool_time} secs")
     print()
 
-    logging.warning("Checking for Url Errors")
+    logger.warning("Checking for Url Errors")
     print(f"{"=" * 20} URL ERRORS {"=" * 20}")
     if not errors:
         print("ALl URLs PARSED SUCCESSFULLY")
-        logging.info("No Errors Found")
+        logger.info("No Errors Found")
 
     else:
-        logging.error("Errors Found | Printing")
+        logger.error("Errors Found | Printing")
         for dcts in errors:
             url = dcts["url"]
             error = dcts["content"]
@@ -493,7 +479,7 @@ if __name__ == "__main__":
                 print(f"Url: {url} | Error: {error}")
     print()
 
-    logging.info("Printing Process Results\n")
+    logger.info("Printing Process Results\n")
     print(f"{"=" * 20} RESULTS {"=" * 20}")
     for dcts in results:
         if not "error" in dcts:
@@ -519,7 +505,7 @@ if __name__ == "__main__":
             print()
 
 
-    logging.info("Scrit Ended\n")
+    logger.info("Scrit Ended\n")
 
 
 
@@ -528,3 +514,7 @@ if __name__ == "__main__":
 different threads which handles different task and that made me giggle, i dont know if it makes my script run faster or otherwise
 i also had issues with dicts, i used [] instead of simply just using, i didnt know the diff btw .json and .json() but to
 be fair, i havent learnt json yet"""
+
+if __name__ == "__main__":
+    with log_to_file(main_path_log) as log_queue:
+        run_cli(log_queue)
