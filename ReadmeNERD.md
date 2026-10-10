@@ -1480,17 +1480,19 @@ This allows processing of remaining URLs even when individual requests fail.
 
 # Performance Measurements
 
-The project measures execution time for each concurrency strategy independently.
+The project records elapsed wall-clock time with `time.perf_counter()`, including network waits. The three strategies run concurrently on different URL partitions. These values describe a run; they are not controlled same-input benchmarks or CPU-time measurements. Divisibility by three does not remove differences in page size, server latency, or resource contention.
+
+The historical result keys below are retained for compatibility, despite their `cpu_time` names.
 
 Recorded metrics include:
 
 | Metric | Description |
 |---------|-------------|
-| cpu_time_async | Asyncio execution time |
-| cpu_time_threaded | ThreadPool execution time |
-| seq_time_threaded | Sequential execution time |
-| cpu_time_process | HTML analysis time |
-| all_cpu_time_process | Overall ProcessPool duration |
+| cpu_time_async | Asyncio partition elapsed time |
+| cpu_time_threaded | ThreadPool partition elapsed time |
+| seq_time_threaded | Sequential partition elapsed time |
+| cpu_time_process | Analysis phase elapsed time, including pool shutdown |
+| all_cpu_time_process | Overall fetch phase elapsed time, including process startup |
 
 ---
 
@@ -1567,7 +1569,7 @@ Current implementation limitations include:
 - HTML content is parsed more than once during analysis.
 - `clean_words()` is called independently by multiple analysis functions.
 - URL partitions may become uneven when the input size is not divisible by three.
-- ThreadPool and Asyncio process identical workloads independently for benchmarking rather than cooperative execution.
+- The strategies process different URL partitions concurrently, so their timings cannot establish which strategy is fastest on the same workload.
 
 These limitations do not affect correctness but may influence performance for very large datasets.
 

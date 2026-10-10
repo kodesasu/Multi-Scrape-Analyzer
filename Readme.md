@@ -14,7 +14,7 @@ The program can:
 - 📊 Analyze word statistics
 - 🔗 Extract hyperlinks
 - 🏷 Count HTML tags
-- 📈 Compare scraping performance
+- 📈 Report elapsed scraping time
 - 📝 Generate execution logs
 
 ---
@@ -27,7 +27,7 @@ The program can:
 - Character frequency analysis
 - HTML tag counting
 - Hyperlink extraction
-- Performance comparison
+- Elapsed-time reporting
 - Automatic logging
 - Error reporting
 
@@ -109,20 +109,24 @@ No additional configuration is required.
 
 The application prints four sections.
 
-## 1. Time Comparison
+## 1. Elapsed Timings
 
-Shows how long each scraping method took.
+Shows elapsed wall-clock seconds measured with the monotonic `time.perf_counter()` clock, including network waits. These are not CPU-time measurements.
+
+Each method handles a different URL partition, and the methods run concurrently. Equal partition sizes do not make the workloads equivalent. Use these values to observe this run; a fair benchmark would give each method the same URLs under controlled conditions and repeat the measurements.
 
 Example:
 
 ```text
-Sequential Time: 4.31 secs
+Sequential partition: 4.31 secs
 
-ThreadPool Time: 1.54 secs
+ThreadPool partition: 1.54 secs
 
-Async Time: 1.17 secs
+Asyncio partition: 1.17 secs
 
-Process Time: 0.82 secs
+Overall fetch phase (including process startup): 4.52 secs
+
+Analysis phase (including pool shutdown): 0.82 secs
 ```
 
 ---

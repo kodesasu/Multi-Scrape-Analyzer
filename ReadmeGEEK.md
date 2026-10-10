@@ -2,6 +2,8 @@
 
 > *The design notes, thought process, mistakes, and lessons learned while building this project.*
 
+Measurement note: the current implementation gives each fetching strategy a different URL partition and runs the strategies concurrently. Its reported times are elapsed wall-clock observations, not a controlled comparison of the same workload. The experiment and learning notes below should be read with that limitation in mind.
+
 For Analytics head to `ReadmeNERD.md`.
 
 Simply want to run the script `Readme.md`.

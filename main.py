@@ -121,15 +121,15 @@ async def fetch_multiple_urls_async(urls, max_retry=None, max_workers=None):
         f"Max Retries for Scrape: {max_retry}, Max Workers for AsyncioThreads: {max_workers}, Urls: {len(urls)}")
     logging.debug(f"Asyncio Threading Process Started")
 
-    start = time.time()
+    start = time.perf_counter()
     async with aiohttp.ClientSession(timeout=time_out) as session:
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(fetch_url_async(session, url, max_retry, semaphore)) for url in urls]
     re_list = [task.result() for task in tasks]
-    finished = round(time.time() - start, 5)
+    finished = round(time.perf_counter() - start, 5)
     cpu_time = {"cpu_time_async": finished}
 
-    logging.info(f"Aysncio Threading Process Completed | CPU Time: {finished} Secs")
+    logging.info(f"Aysncio Threading Process Completed | Elapsed Time: {finished} Secs")
     re_list.append(cpu_time)
 
     logging.info(f"Returning Scraped lIst: {len(re_list)}\n")
@@ -208,14 +208,14 @@ def fetch_multiple_threaded(urls, max_retry=None, max_workers=None):
         f"Max Retries for Scrape: {max_retry}, Max Workers for ThreadPool Threads: {max_workers}, Urls: {len(urls)}")
     logging.debug(f"ThreadPool Threading Process Started")
 
-    start = time.time()
+    start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(fetch_url_threaded, url, max_retry) for url in urls]
         result = [future.result() for future in futures]
-    finished = round(time.time() - start, 5)
+    finished = round(time.perf_counter() - start, 5)
     cpu_time = {"cpu_time_threaded": finished}
 
-    logging.info(f"ThreadPool Threading Process Completed | CPU Time: {finished} Secs")
+    logging.info(f"ThreadPool Threading Process Completed | Elapsed Time: {finished} Secs")
     result.append(cpu_time)
 
     logging.info(f"Returning Scraped lIst: {len(result)}\n")
@@ -232,14 +232,14 @@ def sequential_fetch(urls, max_retry=None):
         f"Max Retries for Scrape: {max_retry}, Urls: {len(urls)}")
     logging.debug(f"Sequential Fetch Threading Process Started")
 
-    start = time.time()
+    start = time.perf_counter()
     for url in urls:
         res = fetch_url_threaded(url, max_rty)
         result_list.append(res)
-    finished = round(time.time() - start, 5)
+    finished = round(time.perf_counter() - start, 5)
     cpu_time = {"seq_time_threaded": finished}
 
-    logging.info(f"Sequential Fetch Threading Process Completed | CPU Time: {finished} Secs")
+    logging.info(f"Sequential Fetch Threading Process Completed | Elapsed Time: {finished} Secs")
     result_list.append(cpu_time)
 
     logging.info(f"Returning Scraped lIst: {len(result_list)}\n")
@@ -378,14 +378,6 @@ def split_urls(urls):
 def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=None):
     main_workers = max_wrks_pool if max_wrks_pool else 4
 
-    if not len(urls) % 3 == 0:
-        logging.info(
-            f"Url list is not divisible by 3 | Current Url List: {len(urls)} | Time comparison might be Inaccurate")
-        print(f"For the most Accurate time Comparison with Sequential_task, ThreadPool and Asyncio, "
-              f"let the Url List be divisible by 3 | "
-              f"Current Url List Length: {len(urls)}")
-        print()
-
     urls_1, urls_2, urls_3 = split_urls(urls)
     logging.info(f"Url splits: first_set={len(urls_1)}, second_set={len(urls_2)}, third_set={len(urls_3)}\n")
 
@@ -394,7 +386,7 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
     collected_errors = []
     pool_results = []
 
-    start = time.time()
+    start = time.perf_counter()
     logging.debug(
         f"Starting ProcessPoolExecutor for Threading | Urls: {len(urls)}, Maximum Worker for ProcessPool: {main_workers}")
 
@@ -417,11 +409,11 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
                         collected_data.append(dicts)
                     else:
                         collected_errors.append(dicts)
-        finished = round(time.time() - start, 5)
+        finished = round(time.perf_counter() - start, 5)
 
         logging.debug(
-            f"ProcessPoolExecutor for Threading Completed | CPU Time: {finished} secs\n")
-        start_2 = time.time()
+            f"ProcessPoolExecutor for Threading Completed | Elapsed Time: {finished} secs\n")
+        start_2 = time.perf_counter()
 
         logging.debug(
             f"Starting ProcessPoolExecutor for Process | Maximum Worker for ProcessPool: {main_workers}")
@@ -431,9 +423,9 @@ def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=
             res = future.result()
             pool_results.append(res)
 
-    fin = round(time.time() - start_2, 5)
+    fin = round(time.perf_counter() - start_2, 5)
     logging.debug(
-        f"ProcessPoolExecutor for Process Completed | CPU Time: {fin} secs\n")
+        f"ProcessPoolExecutor for Process Completed | Elapsed Time: {fin} secs\n")
 
     collected_time.update({"all_cpu_time_process": finished})
     collected_time.update({"cpu_time_process": fin})
@@ -464,12 +456,13 @@ if __name__ == "__main__":
     logging.info("Printing Process Contents")
 
     logging.info("Printing Process Time")
-    print(f"{"=" * 20} TIME COMPARISON {"=" * 20}")
-    print(f"Sequential Time: {sequential_time} secs")
-    print(f"ThreadPool Time: {threadpool_time} secs")
-    print(f"AsyncThread Time: {async_thread_time} secs")
-    print(f"ProcessPool Waiting For Threads Time: {processpool_thread_time} secs")
-    print(f"ProcessPool on Processes Time: {processpool_time} secs")
+    print(f"{"=" * 20} ELAPSED TIMINGS {"=" * 20}")
+    print("Each method handles a different URL partition; these are not same-input benchmark results.")
+    print(f"Sequential partition: {sequential_time} secs")
+    print(f"ThreadPool partition: {threadpool_time} secs")
+    print(f"Asyncio partition: {async_thread_time} secs")
+    print(f"Overall fetch phase (including process startup): {processpool_thread_time} secs")
+    print(f"Analysis phase (including pool shutdown): {processpool_time} secs")
     print()
 
     logging.warning("Checking for Url Errors")
