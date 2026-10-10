@@ -29,7 +29,23 @@ log_handle.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)
 logging.basicConfig(level=logging.DEBUG,
                     handlers=[log_handle])
 
+def _content_kind(content_type):
+    """Classify supported media types without depending on header casing/params."""
+    media_type = str(content_type or "").split(";", 1)[0].strip().lower()
+    if media_type.startswith("text/"):
+        return "text"
+    if media_type == "application/json" or media_type.endswith("+json"):
+        return "json"
+    return None
+
+
+def _require_positive_int(value, name):
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+
+
 async def fetch_url_async(session, url, max_retry, semaphore):
+    _require_positive_int(max_retry, "max_retry")
     async with semaphore:
         logging.debug(f"Fetching url: {url}")
 
@@ -45,75 +61,81 @@ async def fetch_url_async(session, url, max_retry, semaphore):
                             return {"url": url, "success": False, "content": f"Invalid Status Code:{response.status}"}
 
                     else:
-                        if "text" in response.headers.get("Content-Type"):
+                        content_type = response.headers.get("Content-Type", "")
+                        content_kind = _content_kind(content_type)
+                        if content_kind == "text":
                             web_content = await response.text()
 
                             logging.info(f"Aysncio Scraping Successful on [{url}] | Content-Type: html/text ")
                             return {"url": url,
                                     "success": True,
                                     "content": web_content,
-                                    "type": response.headers["Content-Type"]
+                                    "type": content_type
                                     }
 
-                        elif "json" in response.headers.get("Content-Type"):
+                        elif content_kind == "json":
                             web_content = await response.json()
 
                             logging.info(f"Aysncio Scraping Successful on [{url}] | Content-Type: Application/json ")
                             return {"url": url,
                                     "success": True,
                                     "content": web_content,
-                                    "type": response.headers["Content-Type"]
+                                    "type": content_type
                                     }
-                        logging.info(f"Returning Content-type\n")
+                        else:
+                            message = f"Unsupported Content-Type: {content_type or '(missing)'}"
+                            logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {message}")
+                            return {"url": url, "success": False, "content": message}
 
             except aiohttp.ClientConnectorError as cce:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
                     logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {cce}\n")
-                    return {"url": url, "success": False, "content": cce}
+                    return {"url": url, "success": False, "content": str(cce)}
 
             except aiohttp.ClientHttpProxyError as chpe:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
                     logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {chpe}\n")
-                    return {"url": url, "success": False, "content": chpe}
+                    return {"url": url, "success": False, "content": str(chpe)}
 
             except aiohttp.ServerDisconnectedError as sde:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
                     logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {sde}\n")
-                    return {"url": url, "success": False, "content": sde}
+                    return {"url": url, "success": False, "content": str(sde)}
 
             except aiohttp.ClientPayloadError as cpe:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
                     logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {cpe}\n")
-                    return {"url": url, "success": False, "content": cpe}
+                    return {"url": url, "success": False, "content": str(cpe)}
 
             except asyncio.TimeoutError as te:
                 if i < (max_retry - 1):
                     await asyncio.sleep(1)
                 else:
                     logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {te}\n")
-                    return {"url": url, "success": False, "content": te}
+                    return {"url": url, "success": False, "content": str(te) or type(te).__name__}
 
             except Exception as e:
                 if i < max_retry - 1:
                     await asyncio.sleep(1)
                 else:
                     logging.error(f"Aysncio Scraping Failed on [{url}] | Error: {e}\n")
-                    return {"url": url, "success": False, "content": e}
-
+                    return {"url": url, "success": False, "content": str(e)}
 
 async def fetch_multiple_urls_async(urls, max_retry=None, max_workers=None):
     logging.debug("Fetching Url Request | Method: Asyncio")
 
-    max_retry = max_retry if max_retry else 4
-    max_workers = max_workers if max_workers else 4
+    max_retry = 4 if max_retry is None else max_retry
+    max_workers = 4 if max_workers is None else max_workers
+    _require_positive_int(max_retry, "max_retry")
+    _require_positive_int(max_workers, "max_workers")
     time_out = aiohttp.ClientTimeout(sock_connect=5, sock_read=5)
     semaphore = asyncio.Semaphore(max_workers)
 
@@ -135,8 +157,8 @@ async def fetch_multiple_urls_async(urls, max_retry=None, max_workers=None):
     logging.info(f"Returning Scraped lIst: {len(re_list)}\n")
     return re_list
 
-
 def fetch_url_threaded(url, max_retry):
+    _require_positive_int(max_retry, "max_retry")
     logging.debug(f"Fetching url: {url}")
 
     for i in range(max_retry):
@@ -150,59 +172,66 @@ def fetch_url_threaded(url, max_retry):
                         f"ThreadPool Scraping Failed on [{url}] | Error: Invalid Status Code:{response.status_code}\n")
                     return {"url": url, "success": False, "content": f"Invalid Status Code:{response.status_code}"}
             else:
-                if "text" in response.headers.get("Content-Type"):
+                content_type = response.headers.get("Content-Type", "")
+                content_kind = _content_kind(content_type)
+                if content_kind == "text":
 
                     logging.info(f"ThreadPool Scraping Successful on [{url}] | Content-Type: html/text ")
                     return {"url": url,
                             "success": True,
                             "content": response.text,
-                            "type": response.headers["Content-Type"]
+                            "type": content_type
                             }
 
-                elif "json" in response.headers.get("Content-Type"):
+                elif content_kind == "json":
 
                     logging.info(f"ThreadPool Scraping Successful on [{url}] | Content-Type: Application/Json")
                     return {"url": url,
                             "success": True,
                             "content": response.json(),
-                            "type": response.headers["Content-Type"]
+                            "type": content_type
                             }
-                logging.info(f"Returning Content-type\n")
+                else:
+                    message = f"Unsupported Content-Type: {content_type or '(missing)'}"
+                    logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {message}")
+                    return {"url": url, "success": False, "content": message}
 
         except ConnectionError as ce:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
                 logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {ce}\n")
-                return {"url": url, "success": False, "content": ce}
+                return {"url": url, "success": False, "content": str(ce)}
 
         except TimeoutError as te:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
                 logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {te}\n")
-                return {"url": url, "success": False, "content": te}
+                return {"url": url, "success": False, "content": str(te) or type(te).__name__}
 
         except requests.RequestException as rx:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
                 logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {rx}\n")
-                return {"url": url, "success": False, "content": rx}
+                return {"url": url, "success": False, "content": str(rx)}
 
         except Exception as e:
             if i < max_retry - 1:
                 time.sleep(1)
             else:
                 logging.error(f"ThreadPool Scraping Failed on [{url}] | Error: {e}\n")
-                return {"url": url, "success": False, "content": e}
+                return {"url": url, "success": False, "content": str(e)}
 
 def fetch_multiple_threaded(urls, max_retry=None, max_workers=None):
     logging.debug(f"Starting Url Scraping | Method: ThreadPool\n")
     logging.debug("Fetching Url Request | Method: ThreadPool")
 
-    max_workers = max_workers if max_workers else 4
-    max_retry = max_retry if max_retry else 4
+    max_workers = 4 if max_workers is None else max_workers
+    max_retry = 4 if max_retry is None else max_retry
+    _require_positive_int(max_workers, "max_workers")
+    _require_positive_int(max_retry, "max_retry")
 
     logging.info(
         f"Max Retries for Scrape: {max_retry}, Max Workers for ThreadPool Threads: {max_workers}, Urls: {len(urls)}")
@@ -225,7 +254,8 @@ def sequential_fetch(urls, max_retry=None):
     logging.debug(f"Starting Url Scraping | Method: Sequential Fetch\n")
     logging.debug("Fetching Url Request | Method: Sequential Fetch")
 
-    max_rty = max_retry if max_retry else 4
+    max_rty = 4 if max_retry is None else max_retry
+    _require_positive_int(max_rty, "max_retry")
     result_list = []
 
     logging.info(
@@ -244,9 +274,6 @@ def sequential_fetch(urls, max_retry=None):
 
     logging.info(f"Returning Scraped lIst: {len(result_list)}\n")
     return result_list
-
-
-
 
 def clean_words(content):
     logging.debug("Cleaning Words")
@@ -376,7 +403,10 @@ def split_urls(urls):
 
 
 def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=None):
-    main_workers = max_wrks_pool if max_wrks_pool else 4
+    main_workers = 4 if max_wrks_pool is None else max_wrks_pool
+    _require_positive_int(main_workers, "max_wrks_pool")
+    _require_positive_int(4 if max_rty is None else max_rty, "max_rty")
+    _require_positive_int(4 if max_wrks is None else max_wrks, "max_wrks")
 
     if not len(urls) % 3 == 0:
         logging.info(
