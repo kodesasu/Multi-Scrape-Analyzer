@@ -450,7 +450,7 @@ if __name__ == "__main__":
              "https://nigeria.opendataforafrica.org/", "https://finance.yahoo.com/",
              "https://old.reddit.com/"]
 
-    print(f"{"=" * 20} TESTING {"=" * 20}\n")
+    print(f"{'=' * 20} TESTING {'=' * 20}\n")
     logging.info(f"Starting Script Process\n")
     task_time, errors, results = process_multiple_cpu_bound(url_list)
 
@@ -464,7 +464,7 @@ if __name__ == "__main__":
     logging.info("Printing Process Contents")
 
     logging.info("Printing Process Time")
-    print(f"{"=" * 20} TIME COMPARISON {"=" * 20}")
+    print(f"{'=' * 20} TIME COMPARISON {'=' * 20}")
     print(f"Sequential Time: {sequential_time} secs")
     print(f"ThreadPool Time: {threadpool_time} secs")
     print(f"AsyncThread Time: {async_thread_time} secs")
@@ -473,7 +473,7 @@ if __name__ == "__main__":
     print()
 
     logging.warning("Checking for Url Errors")
-    print(f"{"=" * 20} URL ERRORS {"=" * 20}")
+    print(f"{'=' * 20} URL ERRORS {'=' * 20}")
     if not errors:
         print("ALl URLs PARSED SUCCESSFULLY")
         logging.info("No Errors Found")
@@ -494,7 +494,7 @@ if __name__ == "__main__":
     print()
 
     logging.info("Printing Process Results\n")
-    print(f"{"=" * 20} RESULTS {"=" * 20}")
+    print(f"{'=' * 20} RESULTS {'=' * 20}")
     for dcts in results:
         if not "error" in dcts:
             url = dcts["url"]
@@ -503,19 +503,19 @@ if __name__ == "__main__":
             print(f"For URL: {url}")
             print()
             print(f"WORD INFERENCE:")
-            print(f"Total Word Count: {words_analyzed["total_word_count"]}")
-            print(f"Word List: {words_analyzed["word_list"]}")
-            print(f"Word Frequency: {words_analyzed["word_frequency"]}")
-            print(f"Character Distributions: {words_analyzed["character_distributions"]}")
-            print(f"Longest Word: {words_analyzed["longest_word"]}")
-            print(f"Avg. Word Length: {words_analyzed["avg_word_length"]}")
-            print(f"Most Common Word: {words_analyzed["most_common_word"]}")
+            print(f"Total Word Count: {words_analyzed['total_word_count']}")
+            print(f"Word List: {words_analyzed['word_list']}")
+            print(f"Word Frequency: {words_analyzed['word_frequency']}")
+            print(f"Character Distributions: {words_analyzed['character_distributions']}")
+            print(f"Longest Word: {words_analyzed['longest_word']}")
+            print(f"Avg. Word Length: {words_analyzed['avg_word_length']}")
+            print(f"Most Common Word: {words_analyzed['most_common_word']}")
             print()
 
             print(f"HTML INFERENCE:")
-            print(f"All Page Links: {html_analyzed["all_page_links"]}")
-            print(f"HTMl Tags Count: {html_analyzed["html_tags_count"]}")
-            print(f"Word Frequency Dictionary: {html_analyzed["word_frequency_dictionary"]}")
+            print(f"All Page Links: {html_analyzed['all_page_links']}")
+            print(f"HTMl Tags Count: {html_analyzed['html_tags_count']}")
+            print(f"Word Frequency Dictionary: {html_analyzed['word_frequency_dictionary']}")
             print()
 
 

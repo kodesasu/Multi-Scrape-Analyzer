@@ -56,7 +56,7 @@ git clone https://github.com/kodesasu/Multi-Scrape-Analyzer.git
 Move into the project folder.
 
 ```bash
-cd repository
+cd Multi-Scrape-Analyzer
 ```
 
 Install the required packages.
@@ -297,6 +297,18 @@ It can download JSON responses, but HTML analysis is only performed on HTML/text
 ### Where are logs stored?
 
 Inside the automatically created `LOG` folder.
+
+---
+
+# Tests
+
+After installing the dependencies, run the offline test suite:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+CI checks Python 3.11 and 3.14 on Windows and Linux. Tests do not scrape public websites.
 
 ---
 
