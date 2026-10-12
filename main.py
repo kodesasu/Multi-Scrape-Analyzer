@@ -250,98 +250,82 @@ def sequential_fetch(urls, max_retry=None):
 
 def clean_words(content):
     logging.debug("Cleaning Words")
-
     page = BeautifulSoup(content, "html.parser")
     logging.info("Page Parsed with Beautiful Soup 4")
-
-    page_text = page.text.split()
+    # Keep adjacent HTML text nodes from merging separate words.
+    page_text = page.get_text(" ", strip=True).split()
     contraband = """ !.,“”@#$%^&*(){}[];|/\\-_=·+<>:❤'\""""
     contraband_alt = """ !,“”@#$%^&*(){}[];|/\\_=+<>:❤'\"""" #Does not include ['.', '-']
-    cleaned_page_stg1 = [word.strip(contraband) for word in page_text ]
+    cleaned_page_stg1 = [word.strip(contraband) for word in page_text]
     cleaned_page_stg2 = []
-
     for word in cleaned_page_stg1:
-        cleaned_word = "".join(w for w in word if not w in contraband_alt)
-        if cleaned_word:                        #for words like (@@@@) or (!!!!)
-            if not cleaned_word in [".", "-"]:  #for words like (....) or (----)
-                cleaned_page_stg2.append(cleaned_word)
-
+        cleaned_word = "".join(w for w in word if w not in contraband_alt)
+        if cleaned_word and cleaned_word not in [".", "-"]:
+            cleaned_page_stg2.append(cleaned_word)
     logging.info("Words in Page cleaned | Returning Content")
     return page, cleaned_page_stg2
 
-def analyze_words(content):
-    logging.debug("Analyzing Words in Page")
 
-    _, cleaned_page_word_list = clean_words(content)
-    logging.debug("Analyzing cleaned Page")
-
-    cleaned_characters = "".join(word for word in cleaned_page_word_list)
+def _analyze_word_list(cleaned_page_word_list):
+    cleaned_characters = "".join(cleaned_page_word_list)
     word_frequency = Counter(cleaned_page_word_list)
     total_count = len(cleaned_page_word_list)
-    longest = max(cleaned_page_word_list, key=len)
-    longest_word = {longest: len(longest)}
+    longest = max(cleaned_page_word_list, key=len, default=None)
+    longest_word = {longest: len(longest)} if longest is not None else {}
+    average_word_length = round(len(cleaned_characters) / total_count, 4) if total_count else 0.0
+    common = word_frequency.most_common(1)
+    most_common_word = {common[0][0]: common[0][1]} if common else {}
+    return {"total_word_count": total_count,
+            "word_list": cleaned_page_word_list,
+            "word_frequency": word_frequency,
+            "character_distributions": Counter(cleaned_characters),
+            "longest_word": longest_word,
+            "avg_word_length": average_word_length,
+            "most_common_word": most_common_word}
 
-    average_word_length = round(len(cleaned_characters) / len(cleaned_page_word_list), 4)
-    most_common_word = {word_frequency.most_common(1)[0][0] : word_frequency.most_common(1)[0][1]}
-    character_distribution = Counter(cleaned_characters)
 
-    analyzed_word_dict = {"total_word_count": total_count,
-                          "word_list": cleaned_page_word_list,
-                          "word_frequency": word_frequency,
-                          "character_distributions": character_distribution,
-                          "longest_word": longest_word,
-                          "avg_word_length": average_word_length,
-                          "most_common_word": most_common_word,
-                          }
+def analyze_words(content):
+    logging.debug("Analyzing Words in Page")
+    _, cleaned_page_word_list = clean_words(content)
+    return _analyze_word_list(cleaned_page_word_list)
 
-    logging.info("Analyzing Process Completed")
-    return analyzed_word_dict
 
-def analyze_html(content):
-    logging.debug(f"Analyzing HTML Contents in Page")
-
-    page, cleaned_page_word_list = clean_words(content)
+def _analyze_html_parts(page, cleaned_page_word_list):
     find_tags = page.find_all(True)
     find_links = page.find_all("a")
     links = set()
+    for anchor in find_links:
+        link = anchor.get("href")
+        if link and link not in "/#":
+            links.add(link)
+    tags_count = Counter(tag.name for tag in find_tags)
+    return {"all_page_links": links,
+            "html_tags_count": tags_count,
+            "word_frequency_dictionary": Counter(cleaned_page_word_list)}
 
-    for a in find_links:
-        link = a.get("href")
-        if link:
-            if not link in "/#":
-                links.add(link)
-    tags = [tag.name for tag in find_tags]
-    tags_count = Counter(tags)
 
-    word_frequency = Counter(cleaned_page_word_list)
-    html_analyzed = {"all_page_links": links,
-                     "html_tags_count": tags_count,
-                     "word_frequency_dictionary": word_frequency
-                     }
+def analyze_html(content):
+    logging.debug("Analyzing HTML Contents in Page")
+    page, cleaned_page_word_list = clean_words(content)
+    return _analyze_html_parts(page, cleaned_page_word_list)
 
-    logging.info("Analyzing HTML Completed")
-    return html_analyzed
 
 def process_task(dicts):
-    logging.debug(f"Processing Scraped Content-type")
+    logging.debug("Processing Scraped Content-type")
+    url = dicts["url"]
+    content_type = dicts.get("type", "")
+    media_type = content_type.split(";", 1)[0].strip().lower() if isinstance(content_type, str) else ""
+    if not media_type.startswith("text/"):
+        return {"url": url,
+                "error": f"Unsupported content type for HTML analysis: {content_type}"}
+    content = dicts.get("content")
+    if not isinstance(content, str):
+        return {"url": url, "error": "HTML/text response content must be a string"}
 
-    if "text" in dicts["type"]:
-        url = dicts["url"]
-        content = dicts["content"]
-
-        logging.info(f"Content from Url: [{url}] is html/text ")
-        word_analysis = analyze_words(content)
-        html_analysis = analyze_html(content)
-
-        logging.info(f"Scraping Process for [{url}] Completed\n")
-        return {"url": url, "words": word_analysis, "html": html_analysis}
-
-    else:
-        url = dicts["url"]
-        c_type = dicts["type"]
-
-        logging.warning(f"Cannot parse with BeautifulSoup | Content-Type not html/text ")
-        return {"url": url, "error": f"Cannot parse with BeautifulSoup | Content-Type: {c_type}"}
+    page, cleaned_words = clean_words(content)
+    return {"url": url,
+            "words": _analyze_word_list(cleaned_words),
+            "html": _analyze_html_parts(page, cleaned_words)}
 
 
 def run_async(urls, max_rty=None, max_wrks=None):
@@ -351,28 +335,30 @@ def run_async(urls, max_rty=None, max_wrks=None):
     return data
 
 def split_urls(urls):
-    logging.debug(f"Splitting urls into parts for different thread methods")
-
-    dividen = len(urls) // 3
-    mid_range = len(urls) - dividen
-    start_range = mid_range - dividen
-    end_range = len(urls)
-
-    url_set1 = set()
-    url_set2 = set()
-    url_set3 = set()
-
-    for i in range(0, start_range):
-        url_set1.add(urls[i])
-
-    for j in range(start_range, mid_range):
-        url_set2.add(urls[j])
-
-    for k in range(mid_range, len(urls)):
-        url_set3.add(urls[k])
-
+    logging.debug("Splitting urls into parts for different thread methods")
+    quotient, remainder = divmod(len(urls), 3)
+    groups = []
+    start = 0
+    for index in range(3):
+        size = quotient + (index < remainder)
+        groups.append(list(urls[start:start + size]))
+        start += size
     logging.info("Url Splitting Completed")
-    return url_set1, url_set2, url_set3
+    return tuple(groups)
+
+
+def report_errors(errors, results):
+    """Report download and analysis errors independently."""
+    analysis_errors = [result for result in results if "error" in result]
+    if not errors and not analysis_errors:
+        print("ALL URLs PARSED SUCCESSFULLY")
+        logging.info("No Errors Found")
+        return
+    logging.error("Errors Found | Printing")
+    for result in errors:
+        print(f"Url: {result['url']} | Error: {result['content']}")
+    for result in analysis_errors:
+        print(f"Url: {result['url']} | Error: {result['error']}")
 
 
 def process_multiple_cpu_bound(urls, max_rty=None, max_wrks=None, max_wrks_pool=None):
@@ -474,23 +460,7 @@ if __name__ == "__main__":
 
     logging.warning("Checking for Url Errors")
     print(f"{"=" * 20} URL ERRORS {"=" * 20}")
-    if not errors:
-        print("ALl URLs PARSED SUCCESSFULLY")
-        logging.info("No Errors Found")
-
-    else:
-        logging.error("Errors Found | Printing")
-        for dcts in errors:
-            url = dcts["url"]
-            error = dcts["content"]
-            print(f"Url: {url} | Error: {error}")
-
-
-        for dcts in results:
-            if "error" in dcts:
-                url = dcts["url"]
-                error = dcts["error"]
-                print(f"Url: {url} | Error: {error}")
+    report_errors(errors, results)
     print()
 
     logging.info("Printing Process Results\n")

@@ -1564,9 +1564,8 @@ Actual runtime depends primarily on network latency rather than algorithmic comp
 
 Current implementation limitations include:
 
-- HTML content is parsed more than once during analysis.
-- `clean_words()` is called independently by multiple analysis functions.
-- URL partitions may become uneven when the input size is not divisible by three.
+- Calling `analyze_words()` and `analyze_html()` separately parses the input twice; the normal `process_task()` path shares one parse between them.
+- URL partition sizes differ by at most one when the input size is not divisible by three. Every input entry, including duplicate URLs, is preserved.
 - ThreadPool and Asyncio process identical workloads independently for benchmarking rather than cooperative execution.
 
 These limitations do not affect correctness but may influence performance for very large datasets.
